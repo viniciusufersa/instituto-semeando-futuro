@@ -12,7 +12,7 @@ export default function Home() {
       <a className="skip-link" href="#conteudo">Pular para o conteúdo principal</a>
       <Experience />
       <SiteHeader />
-      <main id="conteudo"><Hero /><AboutSection /><PurposeSection /><ProjectsSection /><GallerySection /><GoalsSection /><SupportSection /></main>
+      <main id="conteudo" tabIndex={-1}><Hero /><AboutSection /><PurposeSection /><ProjectsSection /><GallerySection /><GoalsSection /><SupportSection /></main>
       <SiteFooter />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, "\\u003c") }} />
     </>

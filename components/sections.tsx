@@ -100,7 +100,6 @@ export function GoalsSection() {
             <article
               className="goal-card"
               style={{ "--ods-color": goal.color } as CSSProperties}
-              tabIndex={0}
             >
               <span className="sr-only">ODS {goal.number}</span>
               <div className="goal-card__icon-area">

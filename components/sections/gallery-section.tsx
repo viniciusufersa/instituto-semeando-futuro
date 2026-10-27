@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import useEmblaCarousel from "embla-carousel-react";
-import { Image as ImageIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { ChevronLeft, ChevronRight, Image as ImageIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { galleryItems, type GalleryItem } from "@/data/gallery";
 import { BrandMotif } from "@/components/brand-motif";
 
@@ -29,11 +29,85 @@ function getGalleryGap(viewportWidth: number) {
   return GALLERY_GAP.desktop;
 }
 
-function GalleryCard({ item, onMediaReady }: { item: GalleryItem; onMediaReady: () => void }) {
+function GalleryVideo({ item, onMediaReady }: { item: GalleryItem; onMediaReady: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let isNearViewport = false;
+    const updatePlayback = () => {
+      if (!isNearViewport) {
+        video.pause();
+        return;
+      }
+
+      if (reducedMotion.matches) {
+        video.pause();
+        video.preload = "metadata";
+        if (video.networkState === HTMLMediaElement.NETWORK_EMPTY) video.load();
+        return;
+      }
+
+      void video.play().catch(() => undefined);
+    };
+
+    const observer = new IntersectionObserver(([entry]) => {
+      isNearViewport = entry.isIntersecting;
+      updatePlayback();
+    }, { rootMargin: "100px" });
+
+    observer.observe(video);
+    reducedMotion.addEventListener("change", updatePlayback);
+    return () => {
+      observer.disconnect();
+      reducedMotion.removeEventListener("change", updatePlayback);
+    };
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      className="gallery-card__media"
+      muted
+      playsInline
+      loop
+      draggable={false}
+      preload="none"
+      aria-hidden="true"
+      onLoadedMetadata={onMediaReady}
+    >
+      <source src={item.src} type={item.mimeType ?? "video/webm"} />
+    </video>
+  );
+}
+
+function GalleryCard({
+  item,
+  isAccessible,
+  slideNumber,
+  slideCount,
+  onMediaReady,
+}: {
+  item: GalleryItem;
+  isAccessible: boolean;
+  slideNumber: number;
+  slideCount: number;
+  onMediaReady: () => void;
+}) {
   const isPlaceholder = item.type === "placeholder" || !item.src;
 
   return (
-    <div className="embla__slide gallery-slide">
+    <div
+      className="embla__slide gallery-slide"
+      role="group"
+      aria-roledescription="slide"
+      aria-label={`${slideNumber} de ${slideCount}`}
+      aria-hidden={!isAccessible}
+      inert={!isAccessible}
+    >
       <figure
         className={`gallery-card${isPlaceholder ? " gallery-card--placeholder" : ""}`}
         style={{ "--gallery-object-position": item.objectPosition ?? "center" } as CSSProperties}
@@ -50,25 +124,13 @@ function GalleryCard({ item, onMediaReady }: { item: GalleryItem; onMediaReady: 
             sizes="(max-width: 520px) 164px, (max-width: 800px) 176px, 190px"
           />
         ) : item.type === "video" && item.src ? (
-          <video
-            className="gallery-card__media"
-            muted
-            playsInline
-            loop
-            autoPlay
-            draggable={false}
-            preload="metadata"
-            aria-hidden="true"
-            onLoadedMetadata={onMediaReady}
-          >
-            <source src={item.src} type={item.mimeType ?? "video/webm"} />
-          </video>
+          <GalleryVideo item={item} onMediaReady={onMediaReady} />
         ) : (
           <div className="gallery-card__placeholder" aria-hidden="true">
             <ImageIcon aria-hidden="true" />
           </div>
         )}
-        {!isPlaceholder && item.alt && <figcaption className="sr-only">{item.alt}</figcaption>}
+        {item.type === "video" && item.alt && <figcaption className="sr-only">{item.alt}</figcaption>}
       </figure>
     </div>
   );
@@ -77,6 +139,8 @@ function GalleryCard({ item, onMediaReady }: { item: GalleryItem; onMediaReady: 
 export function GallerySection() {
   const hasUserInteracted = useRef(false);
   const horizontalShifts = useRef(new Map<HTMLElement, number>());
+  const reducedMotionRef = useRef(false);
+  const [selectedIndex, setSelectedIndex] = useState(INITIAL_GALLERY_INDEX);
   const [viewportRef, embla] = useEmblaCarousel({
     align: "center",
     containScroll: false,
@@ -87,7 +151,7 @@ export function GallerySection() {
   });
 
   const updateTunnelEffect = useCallback(() => {
-    if (!embla) return;
+    if (!embla || reducedMotionRef.current) return;
 
     const viewportRect = embla.rootNode().getBoundingClientRect();
     if (viewportRect.width === 0) return;
@@ -168,17 +232,29 @@ export function GallerySection() {
   useEffect(() => {
     if (!embla) return;
 
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    reducedMotionRef.current = reducedMotion.matches;
+
     const markAsInteracted = () => {
       hasUserInteracted.current = true;
+    };
+    const updateSelectedIndex = () => setSelectedIndex(embla.selectedScrollSnap());
+    const updateReducedMotion = () => {
+      reducedMotionRef.current = reducedMotion.matches;
+      updateTunnelEffect();
     };
 
     embla.on("scroll", updateTunnelEffect);
     embla.on("select", updateTunnelEffect);
     embla.on("reInit", updateTunnelEffect);
     embla.on("resize", updateTunnelEffect);
+    embla.on("select", updateSelectedIndex);
+    embla.on("reInit", updateSelectedIndex);
     embla.on("pointerDown", markAsInteracted);
+    reducedMotion.addEventListener("change", updateReducedMotion);
     embla.reInit();
     embla.scrollTo(INITIAL_GALLERY_INDEX, true);
+    updateSelectedIndex();
     updateTunnelEffect();
 
     return () => {
@@ -186,7 +262,10 @@ export function GallerySection() {
       embla.off("select", updateTunnelEffect);
       embla.off("reInit", updateTunnelEffect);
       embla.off("resize", updateTunnelEffect);
+      embla.off("select", updateSelectedIndex);
+      embla.off("reInit", updateSelectedIndex);
       embla.off("pointerDown", markAsInteracted);
+      reducedMotion.removeEventListener("change", updateReducedMotion);
     };
   }, [embla, updateTunnelEffect]);
 
@@ -200,7 +279,21 @@ export function GallerySection() {
     updateTunnelEffect();
   }, [embla, updateTunnelEffect]);
 
+  const scrollPrevious = () => {
+    if (!embla) return;
+    hasUserInteracted.current = true;
+    embla.scrollPrev(reducedMotionRef.current);
+  };
+
+  const scrollNext = () => {
+    if (!embla) return;
+    hasUserInteracted.current = true;
+    embla.scrollNext(reducedMotionRef.current);
+  };
+
   if (galleryItems.length === 0) return null;
+
+  const selectedItem = galleryItems[selectedIndex % galleryItems.length];
 
   return (
     <section className="section section--gallery" aria-labelledby="gallery-title">
@@ -216,20 +309,36 @@ export function GallerySection() {
         <div
           className="embla__viewport gallery-marquee"
           ref={viewportRef}
+          id="gallery-carousel"
           role="region"
-          aria-label="Galeria institucional. Arraste horizontalmente para navegar."
+          aria-roledescription="carrossel"
+          aria-label="Galeria institucional"
           onDragStart={(event) => event.preventDefault()}
         >
           <div className="embla__container gallery-marquee__track">
-            {carouselItems.map(({ copyIndex, item }) => (
+            {carouselItems.map(({ copyIndex, item }, index) => (
               <GalleryCard
                 item={item}
+                isAccessible={copyIndex === 1}
+                slideNumber={(index % galleryItems.length) + 1}
+                slideCount={galleryItems.length}
                 onMediaReady={handleMediaReady}
                 key={`${copyIndex}-${item.id}`}
               />
             ))}
           </div>
         </div>
+        <div className="gallery-controls" role="group" aria-label="Controles da galeria">
+          <button className="gallery-control" type="button" aria-label="Imagem anterior da galeria" aria-controls="gallery-carousel" onClick={scrollPrevious}>
+            <ChevronLeft aria-hidden="true" />
+          </button>
+          <button className="gallery-control" type="button" aria-label="Próxima imagem da galeria" aria-controls="gallery-carousel" onClick={scrollNext}>
+            <ChevronRight aria-hidden="true" />
+          </button>
+        </div>
+        <p className="sr-only" aria-live="polite" aria-atomic="true">
+          Imagem {(selectedIndex % galleryItems.length) + 1} de {galleryItems.length}: {selectedItem.alt ?? selectedItem.id}
+        </p>
       </div>
     </section>
   );

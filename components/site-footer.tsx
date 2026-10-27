@@ -20,10 +20,11 @@ export function SiteFooter() {
           <a
             className="button button--light"
             href="https://wa.me/5584991464792"
+            aria-label="Entrar em contato com o Instituto pelo WhatsApp"
             target="_blank"
             rel="noreferrer"
           >
-            Clique aqui <ArrowRight size={18} />
+            Clique aqui <ArrowRight size={18} aria-hidden="true" />
           </a>
         </div>
 

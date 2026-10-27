@@ -15,6 +15,7 @@ export function Hero() {
     const video = videoRef.current;
     if (!hero || !video) return;
 
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let scrollFrame = 0;
     let seekFrame = 0;
     let targetTime = 0;
@@ -22,6 +23,7 @@ export function Hero() {
 
     const seekTowardsTarget = () => {
       seekFrame = 0;
+      if (reducedMotion.matches) return;
       const duration = video.duration;
       if (video.readyState < HTMLMediaElement.HAVE_METADATA || !Number.isFinite(duration) || duration <= 0) return;
       if (video.seeking) return;
@@ -47,6 +49,7 @@ export function Hero() {
 
     const updateTargetTime = () => {
       scrollFrame = 0;
+      if (reducedMotion.matches) return;
       const duration = video.duration;
       if (video.readyState < HTMLMediaElement.HAVE_METADATA || !Number.isFinite(duration) || duration <= 0) return;
 
@@ -69,12 +72,26 @@ export function Hero() {
     };
 
     const continueSeek = () => scheduleSeek();
+    const updateMotionPreference = () => {
+      if (reducedMotion.matches) {
+        cancelAnimationFrame(scrollFrame);
+        cancelAnimationFrame(seekFrame);
+        scrollFrame = 0;
+        seekFrame = 0;
+        video.pause();
+        renderedTime = video.currentTime;
+        return;
+      }
+
+      scheduleTargetUpdate();
+    };
 
     video.addEventListener("loadedmetadata", prepareVideo);
     video.addEventListener("loadeddata", prepareVideo);
     video.addEventListener("seeked", continueSeek);
     window.addEventListener("scroll", scheduleTargetUpdate, { passive: true });
     window.addEventListener("resize", scheduleTargetUpdate);
+    reducedMotion.addEventListener("change", updateMotionPreference);
 
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
       prepareVideo();
@@ -92,6 +109,7 @@ export function Hero() {
       video.removeEventListener("seeked", continueSeek);
       window.removeEventListener("scroll", scheduleTargetUpdate);
       window.removeEventListener("resize", scheduleTargetUpdate);
+      reducedMotion.removeEventListener("change", updateMotionPreference);
     };
   }, []);
 
@@ -103,7 +121,7 @@ export function Hero() {
           ref={videoRef}
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
           tabIndex={-1}
         >
@@ -114,7 +132,7 @@ export function Hero() {
         <div className="container hero__layout">
           <div className="hero__intro">
             <p className="eyebrow eyebrow--light"><Heart size={15} fill="currentColor" /> Transformando vidas desde 2025</p>
-            <h1 id="hero-title">Cuidando de vidas,<span>promovendo dignidade</span></h1>
+            <h1 id="hero-title" tabIndex={-1}>Cuidando de vidas,<span>promovendo dignidade</span></h1>
             <p className="hero__summary">Acolhimento, inclusão e esperança para famílias em situação de vulnerabilidade social no Rio Grande do Norte.</p>
             <div className="hero__actions">
               <Button asChild variant="light"><a href="#como-apoiar">Apoiar agora <ArrowRight size={18} /></a></Button>
