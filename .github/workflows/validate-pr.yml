@@ -1,0 +1,56 @@
+name: Validate pull request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Build static GitHub Pages site
+        run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /instituto-semeando-futuro
+          NEXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+
+      - name: Verify static export
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f out/index.html
+          test -f out/404.html
+          test -f out/manifest.webmanifest
+          test -f out/robots.txt
+          test -f out/sitemap.xml
+          test -n "$(find out/_next/static/css -maxdepth 1 -type f -name '*.css' -print -quit)"

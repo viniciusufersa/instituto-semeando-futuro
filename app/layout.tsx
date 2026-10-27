@@ -10,10 +10,12 @@ const geist = localFont({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://semeandoofuturo.org";
+const siteUrl = new URL(
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://semeandoofuturo.org",
+);
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(siteUrl.origin),
   title: {
     default: "Instituto Semeando o Futuro",
     template: "%s | Instituto Semeando o Futuro",
